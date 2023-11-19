@@ -1,18 +1,16 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 )
-
-func hello(w http.ResponseWriter, req *http.Request) {
-
-	fmt.Fprintf(w, "hello\n")
-}
 
 func main() {
 
 	http.Handle("/", http.FileServer(http.Dir("./static")))
+
+	http.HandleFunc("/bpfreq", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./static/bpfreq.html")
+	})
 
 	http.ListenAndServe(":8080", nil)
 }

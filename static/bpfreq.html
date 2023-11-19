@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Byte Pair Visualization</title>
+    <link href="./output.css" rel="stylesheet" />
+  </head>
+  <body class="bg-zinc-100 m-0">
+    <div
+      class="shadow-md my-10 mx-auto p-6 md:p-10 max-w-screen-md bg-white border-zinc-100"
+    >
+      <h1 class="mt-0">bpfreq</h1>
+      <p>
+        Upload any file to visualize the frequencies of different byte pairs in
+        it as an image. For some files this will reveal interesting or pretty
+        structure. For compressed files like .zip or .jpeg it will mostly be
+        noise.
+      </p>
+      <p>
+        For nice examples and the code, see the
+        <a href="https://github.com/fplonka/bpfreq">Github</a>.
+      </p>
+      <input type="file" id="fileInput" />
+      <canvas
+        id="canvas"
+        width="256"
+        height="256"
+        style="display: none"
+      ></canvas>
+      <p class="mb-0">
+        <img
+          class=""
+          id="image"
+          style="image-rendering: pixelated; width: 768px; height: 768px"
+        />
+      </p>
+    </div>
+  </body>
+  <script>
+    document
+      .getElementById('fileInput')
+      .addEventListener('change', function () {
+        processFile()
+      })
+
+    function processFile() {
+      const fileInput = document.getElementById('fileInput')
+      const file = fileInput.files[0]
+      if (!file) {
+        alert('Please select a file first.')
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = function (event) {
+        const contents = new Uint8Array(event.target.result)
+        const { frequencies, maxFreq } = getBytePairFrequencies(contents)
+        const canvas = document.getElementById('canvas')
+        const ctx = canvas.getContext('2d')
+        const imgData = ctx.createImageData(256, 256)
+        visualizeFrequencies(frequencies, maxFreq, imgData)
+        ctx.putImageData(imgData, 0, 0)
+        const img = document.getElementById('image')
+        img.src = canvas.toDataURL('image/png')
+        img.classList.remove('hidden') // Remove the 'hidden' class to display the image
+        canvas.style.display = 'none' // Hide the canvas and just show the image
+      }
+
+      reader.onerror = function () {
+        alert('There was an error reading the file!')
+      }
+
+      reader.readAsArrayBuffer(file)
+    }
+
+    function getBytePairFrequencies(contents) {
+      let frequencies = new Array(256)
+        .fill(null)
+        .map(() => new Array(256).fill(0))
+      let maxFreq = 0
+      for (let i = 0; i < contents.length - 1; i++) {
+        let b1 = contents[i]
+        let b2 = contents[i + 1]
+        frequencies[b1][b2]++
+        if (frequencies[b1][b2] > maxFreq) {
+          maxFreq = frequencies[b1][b2]
+        }
+      }
+      return { frequencies, maxFreq }
+    }
+
+    function visualizeFrequencies(frequencies, maxFreq, imgData) {
+      let maxLog = Math.log(1 + maxFreq)
+      for (let y = 0; y < 256; y++) {
+        for (let x = 0; x < 256; x++) {
+          let val = frequencies[x][y]
+          let brightness = Math.log(1 + val) / maxLog
+          let color = Math.floor(brightness * 255)
+          let index = (y * 256 + x) * 4
+          imgData.data[index] = color // Red
+          imgData.data[index + 1] = color // Green
+          imgData.data[index + 2] = color // Blue
+          imgData.data[index + 3] = 255 // Alpha
+        }
+      }
+    }
+  </script>
+</html>
