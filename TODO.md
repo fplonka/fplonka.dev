@@ -1,10 +1,12 @@
 - figure out go templates
 - figure out htmx
 
+- figure out examples for bpfreq (inner readme?)
+
 - sketch out a basic layout
-    - homepage
 
+  - homepage
 
-    - go-llca
-    - bpfreq
-    - lucentsave
+  - go-llca
+  - bpfreq
+  - lucentsave

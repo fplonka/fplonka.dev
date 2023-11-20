@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<input
+  type="text"
+  id="focusTarget"
+  style="position: absolute; opacity: 0; pointer-events: none"
+/>
+<script src="wasm_exec.js"></script>
+<script>
+  // Polyfill
+  if (!WebAssembly.instantiateStreaming) {
+    WebAssembly.instantiateStreaming = async (resp, importObject) => {
+      const source = await (await resp).arrayBuffer()
+      return await WebAssembly.instantiate(source, importObject)
+    }
+  }
+
+  const go = new Go()
+  WebAssembly.instantiateStreaming(fetch('go-llca.wasm'), go.importObject).then(
+    result => {
+      go.run(result.instance)
+    }
+  )
+
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'f' || e.key === 'F') {
+      e.preventDefault()
+      window.parent.postMessage('toggleFullscreen', '*') // Adjust the target origin as needed for security
+    }
+  })
+
+  window.addEventListener('message', function (e) {
+    if (e.data === 'focusInput') {
+      document.getElementById('focusTarget').focus()
+    }
+  })
+</script>

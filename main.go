@@ -12,5 +12,9 @@ func main() {
 		http.ServeFile(w, r, "./static/bpfreq.html")
 	})
 
+	http.HandleFunc("/go-llca", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./static/go-llca.html")
+	})
+
 	http.ListenAndServe(":8080", nil)
 }
