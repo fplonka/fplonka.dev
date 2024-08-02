@@ -1,36 +1,41 @@
 <!DOCTYPE html>
+<!-- Hidden input field to manage focus -->
 <input
   type="text"
   id="focusTarget"
   style="position: absolute; opacity: 0; pointer-events: none"
 />
+<!-- WebAssembly support script -->
 <script src="wasm_exec.js"></script>
 <script>
-  // Polyfill
+  // Add WebAssembly streaming instantiation polyfill if not supported
   if (!WebAssembly.instantiateStreaming) {
     WebAssembly.instantiateStreaming = async (resp, importObject) => {
-      const source = await (await resp).arrayBuffer()
-      return await WebAssembly.instantiate(source, importObject)
-    }
+      const source = await (await resp).arrayBuffer();
+      return await WebAssembly.instantiate(source, importObject);
+    };
   }
 
-  const go = new Go()
+  // Instantiate and run the WebAssembly module
+  const go = new Go();
   WebAssembly.instantiateStreaming(fetch('go-llca.wasm'), go.importObject).then(
     result => {
-      go.run(result.instance)
+      go.run(result.instance);
     }
-  )
+  );
 
+  // Listen for 'f' or 'F' key press to toggle fullscreen
   window.addEventListener('keydown', function (e) {
     if (e.key === 'f' || e.key === 'F') {
-      e.preventDefault()
-      window.parent.postMessage('toggleFullscreen', '*') // Adjust the target origin as needed for security
+      e.preventDefault();
+      window.parent.postMessage('toggleFullscreen', '*'); // Ensure to adjust the target origin for security
     }
-  })
+  });
 
+  // Listen for messages to focus the hidden input field
   window.addEventListener('message', function (e) {
     if (e.data === 'focusInput') {
-      document.getElementById('focusTarget').focus()
+      document.getElementById('focusTarget').focus();
     }
-  })
+  });
 </script>
