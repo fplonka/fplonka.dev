@@ -202,10 +202,6 @@
   white-space: nowrap
 }
 
-.border-4 {
-  border-width: 4px
-}
-
 .border-2 {
   border-width: 2px
 }
@@ -286,6 +282,35 @@
   filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)
 }
 
+.\*\:p-10 > * {
+  padding: 2.5rem
+}
+
+.\*\:py-1 > * {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem
+}
+
+.\*\:py-10 > * {
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem
+}
+
+.\*\:text-red-100 > * {
+  --tw-text-opacity: 1;
+  color: rgb(254 226 226 / var(--tw-text-opacity))
+}
+
+.\*\:text-red-50 > * {
+  --tw-text-opacity: 1;
+  color: rgb(254 242 242 / var(--tw-text-opacity))
+}
+
+.\*\:text-red-500 > * {
+  --tw-text-opacity: 1;
+  color: rgb(239 68 68 / var(--tw-text-opacity))
+}
+
 @media (min-width: 768px) {
   .md\:p-10 {
     padding: 2.5rem
@@ -300,4 +325,65 @@
     padding-top: 1.5rem;
     padding-bottom: 1.5rem
   }
+}
+
+.\[\&_a\]\:p-10 a {
+  padding: 2.5rem
+}
+
+.\[\&_s\]\:p-10 s {
+  padding: 2.5rem
+}
+
+.\[\&_su\]\:p-10 su {
+  padding: 2.5rem
+}
+
+.\[\&_sum\]\:p-10 sum {
+  padding: 2.5rem
+}
+
+.\[\&_summ\]\:p-10 summ {
+  padding: 2.5rem
+}
+
+.\[\&_summar\]\:p-10 summar {
+  padding: 2.5rem
+}
+
+.\[\&_summary\]\:p-10 summary {
+  padding: 2.5rem
+}
+
+.\[\&_summary\]\:p-1 summary {
+  padding: 0.25rem
+}
+
+.\[\&_summary\]\:py-2 summary {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem
+}
+
+.\[\&_summary\]\:py-5 summary {
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem
+}
+
+.\[\&_summary\]\:py-1 summary {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem
+}
+
+.\[\&_summary\]\:pt-1 summary {
+  padding-top: 0.25rem
+}
+
+.\[\&_summary\]\:text-red-50 summary {
+  --tw-text-opacity: 1;
+  color: rgb(254 242 242 / var(--tw-text-opacity))
+}
+
+.\[\&_summary\]\:text-red-500 summary {
+  --tw-text-opacity: 1;
+  color: rgb(239 68 68 / var(--tw-text-opacity))
 }
