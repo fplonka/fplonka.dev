@@ -1,119 +1,112 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>go-llca</title>
-    <link href="./output.css" rel="stylesheet" />
-    <script>
-      function toggleFullScreen(iframeId) {
-        var iframe = document.getElementById(iframeId)
-        if (!document.fullscreenElement) {
-          iframe.requestFullscreen().catch(err => {
-            alert(
-              `Error attempting to enable full-screen mode: ${err.message} (${err.name})`
-            )
-          })
-        } else {
-          if (document.exitFullscreen) {
-            document.exitFullscreen()
-          }
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>go-llca</title>
+  <link href="./output.css" rel="stylesheet" />
+  <script>
+    function toggleFullScreen(iframeId) {
+      var iframe = document.getElementById(iframeId)
+      if (!document.fullscreenElement) {
+        iframe.requestFullscreen().catch(err => {
+          alert(
+            `Error attempting to enable full-screen mode: ${err.message} (${err.name})`
+          )
+        })
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen()
         }
       }
+    }
 
-      function reloadIframe(iframeId) {
-        var iframe = document.getElementById(iframeId)
-        setTimeout(function () {
-          iframe.contentWindow.location.reload(true)
-        }, 200)
-      }
+    function reloadIframe(iframeId) {
+      var iframe = document.getElementById(iframeId)
+      setTimeout(function () {
+        iframe.contentWindow.location.reload(true)
+      }, 200)
+    }
 
-      function enterAndReload(iframeId) {
-        toggleFullScreen(iframeId)
+    function enterAndReload(iframeId) {
+      toggleFullScreen(iframeId)
+      // reloadIframe(iframeId)
+    }
+
+    // Listen for the fullscreen change event
+    document.onfullscreenchange = function (event) {
+      var iframeId = 'gameIframe'
+      var iframe = document.getElementById(iframeId)
+
+      if (!document.fullscreenElement) {
         // reloadIframe(iframeId)
       }
 
-      // Listen for the fullscreen change event
-      document.onfullscreenchange = function (event) {
+      setTimeout(function () {
+        console.log('focusing')
+        iframe.focus()
+      }, 200)
+    }
+
+    // Listen for keydown events on the entire document
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault()
+        enterAndReload('gameIframe')
+
         var iframeId = 'gameIframe'
         var iframe = document.getElementById(iframeId)
-
-        if (!document.fullscreenElement) {
-          // reloadIframe(iframeId)
-        }
-
-        setTimeout(function () {
-          console.log('focusing')
-          iframe.focus()
-        }, 200)
       }
+    })
 
-      // Listen for keydown events on the entire document
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'f' || e.key === 'F') {
-          e.preventDefault()
+    window.addEventListener(
+      'message',
+      function (e) {
+        if (e.data === 'toggleFullscreen') {
           enterAndReload('gameIframe')
-
-          var iframeId = 'gameIframe'
-          var iframe = document.getElementById(iframeId)
         }
-      })
+      },
+      false
+    )
 
-      window.addEventListener(
-        'message',
-        function (e) {
-          if (e.data === 'toggleFullscreen') {
-            enterAndReload('gameIframe')
-          }
-        },
-        false
-      )
-
-      function checkFocus() {
-        var iframeId = 'gameIframe'
-        var iframe = document.getElementById(iframeId)
-        if (document.activeElement == iframe) {
-          iframe.classList.remove('brightness-75')
-        } else {
-          iframe.classList.add('brightness-75')
-        }
+    function checkFocus() {
+      var iframeId = 'gameIframe'
+      var iframe = document.getElementById(iframeId)
+      if (document.activeElement == iframe) {
+        iframe.classList.remove('brightness-75')
+      } else {
+        iframe.classList.add('brightness-75')
       }
+    }
 
-      window.setInterval(checkFocus, 100)
-    </script>
-  </head>
-  <body class="bg-zinc-100 m-0">
-    <div
-      class="shadow-md mx-auto py-4 md:py-6 px-4 md:px-6 max-w-screen-xl bg-white border-zinc-100"
-    >
-      <div class="flex">
-        <iframe
-          id="gameIframe"
-          class="w-[1200px] h-[800px] m-auto brightnes-75 border-none"
-          src="go-llca/iframe.html"
-          title="Cellular Automata Game"
-          scrolling="no"
-          tabindex="-1"
-        ></iframe>
-      </div>
-      <div class="text-lg pb-0 mb-0">
-        <p>
-          go-llca is a
-          <a href="https://en.wikipedia.org/wiki/Life-like_cellular_automaton"
-            >life-like cellular automaton</a
-          >
-          simulation tool written in Go. For the code and example simulations,
-          see the <a href="https://github.com/fplonka/go-llca">Github page</a>.
-          Note that the browser version does not support exporting simulation
-          runs as GIFs. For that, you can download the more performant native
-          version from the Github
-          <a href="https://github.com/fplonka/go-llca/releases">releases page</a
-          >.
-        </p>
-        <p class="mb-0">
-          Fun rules to try include: B45678/S2345, B4678/S35678, B3578/S24678,
-          B378/S245678.
-        </p>
-      </div>
+    window.setInterval(checkFocus, 100)
+  </script>
+</head>
+
+<body class="bg-zinc-100 m-0">
+  <div class="shadow-md mx-auto py-4 md:py-6 px-4 md:px-6 max-w-screen-xl bg-white border-zinc-100">
+    <div class="flex">
+      <iframe id="gameIframe" class="w-[1200px] h-[800px] m-auto brightnes-75 border-none" src="go-llca/iframe.html"
+        title="Cellular Automata Game" scrolling="no" tabindex="-1"></iframe>
     </div>
-  </body>
+    <div class="text-lg pb-0 mb-0">
+      <p>
+        go-llca is a
+        <a href="https://en.wikipedia.org/wiki/Life-like_cellular_automaton">life-like cellular automaton</a>
+        simulation tool written in Go. For the code and example simulations,
+        see the <a href="https://github.com/fplonka/go-llca">Github page</a>.
+        Note that the browser version does not support exporting simulation
+        runs as GIFs. For that, you can download the more performant native
+        version from the Github
+        <a href="https://github.com/fplonka/go-llca/releases">releases page</a>.
+      </p>
+      <p class="mb-0">
+        Fun rules to try include: B45678/S2345, B4678/S35678, B3578/S24678,
+        B378/S245678.
+      </p>
+    </div>
+  </div>
+</body>
+
 </html>
