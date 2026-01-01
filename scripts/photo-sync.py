@@ -29,7 +29,7 @@ import hashlib
 import argparse
 from pathlib import Path
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import osxphotos
 from PIL import Image, ImageOps
@@ -251,18 +251,25 @@ def main():
 
     # Process images (downloads from iCloud if needed)
     print("\nProcessing images...")
-    processed = []
     photos_to_process = photos[:args.limit] if args.limit > 0 else photos
-    for photo in photos_to_process:
-        # Skip RAW files
-        ext = Path(photo.filename).suffix.lower()
-        if ext in SKIP_EXTENSIONS:
-            continue
 
-        file_hash = get_photo_hash(photo)
-        result = process_image(photo, CACHE_DIR, file_hash)
-        if result:
-            processed.append(result)
+    # Filter out RAW files first
+    photos_filtered = [
+        p for p in photos_to_process
+        if Path(p.filename).suffix.lower() not in SKIP_EXTENSIONS
+    ]
+
+    # Process in parallel (4 workers - gentle on Photos.app)
+    processed = []
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {
+            executor.submit(process_image, photo, CACHE_DIR, get_photo_hash(photo)): photo
+            for photo in photos_filtered
+        }
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                processed.append(result)
 
     # Sort by date (newest first)
     processed.sort(key=lambda x: x["date"], reverse=True)
@@ -273,20 +280,27 @@ def main():
     print("\nChecking R2...")
     existing = list_r2_objects(args.dry_run)
 
-    # Upload new images
+    # Upload new images in parallel (8 workers for network I/O)
     print("\nUploading to R2...")
-    uploaded = 0
+    uploads = []
     for p in processed:
         thumb_key = f"thumb/{p['hash']}.webp"
         full_key = f"full/{p['hash']}.webp"
-
         if thumb_key not in existing:
-            if upload_to_r2(p["thumb_local"], thumb_key, args.dry_run):
-                uploaded += 1
-
+            uploads.append((p["thumb_local"], thumb_key))
         if full_key not in existing:
-            if upload_to_r2(p["full_local"], full_key, args.dry_run):
-                uploaded += 1
+            uploads.append((p["full_local"], full_key))
+
+    uploaded = 0
+    if uploads:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [
+                executor.submit(upload_to_r2, local, key, args.dry_run)
+                for local, key in uploads
+            ]
+            for future in as_completed(futures):
+                if future.result():
+                    uploaded += 1
 
     print(f"Uploaded {uploaded} new files")
 

@@ -110,6 +110,10 @@
   position: static
 }
 
+.fixed {
+  position: fixed
+}
+
 .absolute {
   position: absolute
 }
@@ -140,12 +144,24 @@
   margin-bottom: 0px
 }
 
+.mb-6 {
+  margin-bottom: 1.5rem
+}
+
 .mt-0 {
   margin-top: 0px
 }
 
+.mt-2 {
+  margin-top: 0.5rem
+}
+
 .flex {
   display: flex
+}
+
+.grid {
+  display: grid
 }
 
 .contents {
@@ -184,6 +200,10 @@
   flex-grow: 1
 }
 
+.transform {
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))
+}
+
 .flex-col {
   flex-direction: column
 }
@@ -202,10 +222,6 @@
   white-space: nowrap
 }
 
-.border-2 {
-  border-width: 2px
-}
-
 .border {
   border-width: 1px
 }
@@ -214,19 +230,9 @@
   border-style: none
 }
 
-.border-red-500 {
-  --tw-border-opacity: 1;
-  border-color: rgb(239 68 68 / var(--tw-border-opacity))
-}
-
 .border-zinc-100 {
   --tw-border-opacity: 1;
   border-color: rgb(244 244 245 / var(--tw-border-opacity))
-}
-
-.border-red-50 {
-  --tw-border-opacity: 1;
-  border-color: rgb(254 242 242 / var(--tw-border-opacity))
 }
 
 .bg-white {
@@ -242,6 +248,10 @@
 .bg-zinc-400 {
   --tw-bg-opacity: 1;
   background-color: rgb(161 161 170 / var(--tw-bg-opacity))
+}
+
+.p-4 {
+  padding: 1rem
 }
 
 .p-6 {
@@ -271,10 +281,20 @@
   line-height: 1.75rem
 }
 
+.text-zinc-500 {
+  --tw-text-opacity: 1;
+  color: rgb(113 113 122 / var(--tw-text-opacity))
+}
+
 .shadow-md {
   --tw-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --tw-shadow-colored: 0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color);
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)
+}
+
+.blur {
+  --tw-blur: blur(8px);
+  filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)
 }
 
 .brightness-75 {
@@ -282,38 +302,26 @@
   filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)
 }
 
-.\*\:p-10 > * {
-  padding: 2.5rem
+.transition {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms
 }
 
-.\*\:py-1 > * {
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem
-}
-
-.\*\:py-10 > * {
-  padding-top: 2.5rem;
-  padding-bottom: 2.5rem
-}
-
-.\*\:text-red-100 > * {
+.hover\:text-zinc-700:hover {
   --tw-text-opacity: 1;
-  color: rgb(254 226 226 / var(--tw-text-opacity))
-}
-
-.\*\:text-red-50 > * {
-  --tw-text-opacity: 1;
-  color: rgb(254 242 242 / var(--tw-text-opacity))
-}
-
-.\*\:text-red-500 > * {
-  --tw-text-opacity: 1;
-  color: rgb(239 68 68 / var(--tw-text-opacity))
+  color: rgb(63 63 70 / var(--tw-text-opacity))
 }
 
 @media (min-width: 768px) {
   .md\:p-10 {
     padding: 2.5rem
+  }
+
+  .md\:p-6 {
+    padding: 1.5rem
   }
 
   .md\:px-6 {
@@ -327,63 +335,6 @@
   }
 }
 
-.\[\&_a\]\:p-10 a {
-  padding: 2.5rem
-}
-
-.\[\&_s\]\:p-10 s {
-  padding: 2.5rem
-}
-
-.\[\&_su\]\:p-10 su {
-  padding: 2.5rem
-}
-
-.\[\&_sum\]\:p-10 sum {
-  padding: 2.5rem
-}
-
-.\[\&_summ\]\:p-10 summ {
-  padding: 2.5rem
-}
-
-.\[\&_summar\]\:p-10 summar {
-  padding: 2.5rem
-}
-
-.\[\&_summary\]\:p-10 summary {
-  padding: 2.5rem
-}
-
-.\[\&_summary\]\:p-1 summary {
-  padding: 0.25rem
-}
-
-.\[\&_summary\]\:py-2 summary {
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem
-}
-
-.\[\&_summary\]\:py-5 summary {
-  padding-top: 1.25rem;
-  padding-bottom: 1.25rem
-}
-
-.\[\&_summary\]\:py-1 summary {
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem
-}
-
 .\[\&_summary\]\:pt-1 summary {
   padding-top: 0.25rem
-}
-
-.\[\&_summary\]\:text-red-50 summary {
-  --tw-text-opacity: 1;
-  color: rgb(254 242 242 / var(--tw-text-opacity))
-}
-
-.\[\&_summary\]\:text-red-500 summary {
-  --tw-text-opacity: 1;
-  color: rgb(239 68 68 / var(--tw-text-opacity))
 }
