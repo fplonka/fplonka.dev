@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>photos - filip płonka</title>
+  <link href="../output.css" rel="stylesheet" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 4px;
+    }
+
+    .photo-item {
+      aspect-ratio: 3/2;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .photo-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.2s ease;
+    }
+
+    .photo-item:hover img {
+      transform: scale(1.02);
+    }
+
+    /* Lightbox */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .lightbox.active {
+      display: flex;
+    }
+
+    .lightbox img {
+      max-width: 95vw;
+      max-height: 95vh;
+      object-fit: contain;
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: white;
+      font-size: 2rem;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 10px;
+    }
+
+    .lightbox-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      color: white;
+      font-size: 2rem;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 20px;
+      opacity: 0.7;
+    }
+
+    .lightbox-nav:hover {
+      opacity: 1;
+    }
+
+    .lightbox-prev {
+      left: 10px;
+    }
+
+    .lightbox-next {
+      right: 10px;
+    }
+  </style>
+</head>
+
+<body class="bg-zinc-100 m-0">
+  <div class="p-4 md:p-6">
+    <header class="mb-6">
+      <a href="/" class="text-zinc-500 hover:text-zinc-700">← back</a>
+      <h1 class="m-0 mt-2">photos</h1>
+    </header>
+
+    <div class="photo-grid" id="gallery">
+      <!-- Photos injected by script -->
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox">
+    <button class="lightbox-close" onclick="closeLightbox()">×</button>
+    <button class="lightbox-nav lightbox-prev" onclick="navigate(-1)">‹</button>
+    <img id="lightbox-img" src="" alt="">
+    <button class="lightbox-nav lightbox-next" onclick="navigate(1)">›</button>
+  </div>
+
+  <script>
+    // Photo data injected by build script
+    const photos = [{"thumb": "https://pub-9fffa49765b54776a5da8b81c29321c9.r2.dev/thumb/79200b3ab21f.webp", "full": "https://pub-9fffa49765b54776a5da8b81c29321c9.r2.dev/full/79200b3ab21f.webp"}, {"thumb": "https://pub-9fffa49765b54776a5da8b81c29321c9.r2.dev/thumb/0df2fdea6702.webp", "full": "https://pub-9fffa49765b54776a5da8b81c29321c9.r2.dev/full/0df2fdea6702.webp"}];
+
+    let currentIndex = 0;
+
+    function init() {
+      const gallery = document.getElementById('gallery');
+      photos.forEach((photo, i) => {
+        const div = document.createElement('div');
+        div.className = 'photo-item';
+        div.onclick = () => openLightbox(i);
+        div.innerHTML = `<img src="${photo.thumb}" alt="" loading="lazy" decoding="async">`;
+        gallery.appendChild(div);
+      });
+    }
+
+    function openLightbox(index) {
+      currentIndex = index;
+      const img = document.getElementById('lightbox-img');
+      img.src = photos[index].full;
+      document.getElementById('lightbox').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function navigate(dir) {
+      currentIndex = (currentIndex + dir + photos.length) % photos.length;
+      document.getElementById('lightbox-img').src = photos[currentIndex].full;
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (!document.getElementById('lightbox').classList.contains('active')) return;
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') navigate(-1);
+      if (e.key === 'ArrowRight') navigate(1);
+    });
+
+    document.getElementById('lightbox').addEventListener('click', (e) => {
+      if (e.target.id === 'lightbox') closeLightbox();
+    });
+
+    init();
+  </script>
+</body>
+
+</html>

@@ -6,6 +6,7 @@ module.exports = {
         "./static/git-cluster/*.{html,js}",
         "./static/go-llca/*.{html,js}",
         "./static/organize-anything/skeleton.html",
+        "./static/photos/*.html",
     ],
     theme: {
         extend: {},
