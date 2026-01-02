@@ -47,11 +47,11 @@ CACHE_DIR = Path.home() / ".cache" / "photo-gallery"
 OUTPUT_HTML = Path(__file__).parent.parent / "static" / "photos" / "index.html"
 HTML_TEMPLATE = Path(__file__).parent.parent / "static" / "photos" / "template.html"
 
-# R2 settings - fill these in
-R2_ACCOUNT_ID = "REDACTED_ACCOUNT_ID"
-R2_ACCESS_KEY = "REDACTED_ACCESS_KEY"
-R2_SECRET_KEY = "REDACTED_SECRET_KEY"
-R2_BUCKET = "fplonkadev-photos"
+# R2 settings - set these environment variables
+R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "")
+R2_ACCESS_KEY = os.environ.get("R2_ACCESS_KEY", "")
+R2_SECRET_KEY = os.environ.get("R2_SECRET_KEY", "")
+R2_BUCKET = os.environ.get("R2_BUCKET", "fplonkadev-photos")
 # Use the r2.dev URL from your bucket's settings (no custom domain needed)
 R2_PUBLIC_URL = "https://pub-9fffa49765b54776a5da8b81c29321c9.r2.dev"
 
