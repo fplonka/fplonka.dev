@@ -21,7 +21,6 @@
       display: block;
     }
 
-    /* Lightbox */
     .lightbox {
       display: none;
       position: fixed;
@@ -36,45 +35,10 @@
       display: flex;
     }
 
-    .lightbox-content {
-      position: relative;
-      max-width: 95vw;
-      max-height: 95vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      overflow: hidden;
-    }
-
-    .lightbox-content img {
+    .lightbox img {
       max-width: 95vw;
       max-height: 95vh;
       object-fit: contain;
-    }
-
-    .lightbox-content img.loading {
-      filter: blur(20px);
-      transform: scale(1.1);
-    }
-
-    .lightbox-spinner {
-      position: absolute;
-      width: 40px;
-      height: 40px;
-      border: 3px solid rgba(255,255,255,0.3);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      display: none;
-      z-index: 10;
-    }
-
-    .lightbox-spinner.active {
-      display: block;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
     }
 
     .lightbox-close {
@@ -108,9 +72,7 @@
 
     @media (max-width: 600px) {
       .lightbox-nav { display: none; }
-      .photo-item { height: 150px; }
     }
-
   </style>
 </head>
 
@@ -119,23 +81,17 @@
     <header class="mb-6">
       <h1 class="m-0">photos</h1>
       <p class="mt-4 mb-0">
-      photos from my fuji x100vi from newest to oldest. this autosyncs to my icloud photos where i save all decent pictures, so not everything here is exactly brilliant. but there are a few bangers. 
+      photos from my fuji x100vi from newest to oldest. this autosyncs to my icloud photos where i save all decent pictures, so not everything here is exactly brilliant. but there are a few bangers.
       </p>
     </header>
 
-    <div class="photo-grid" id="gallery">
-      <!-- Photos injected by script -->
-    </div>
+    <div class="photo-grid" id="gallery"></div>
   </div>
 
-  <!-- Lightbox -->
   <div class="lightbox" id="lightbox">
     <button class="lightbox-close" onclick="closeLightbox()">×</button>
     <button class="lightbox-nav lightbox-prev" onclick="navigate(-1)">‹</button>
-    <div class="lightbox-content">
-      <div class="lightbox-spinner" id="spinner"></div>
-      <img id="lightbox-img" src="" alt="">
-    </div>
+    <img id="lightbox-img" src="" alt="">
     <button class="lightbox-nav lightbox-next" onclick="navigate(1)">›</button>
   </div>
 
@@ -144,31 +100,12 @@
 
     let currentIndex = 0;
     let touchStartX = 0;
-    let touchEndX = 0;
     let wasMultiTouch = false;
-
     let photoElements = [];
-    const preloadCache = new Map();
-
-    function preloadImage(index) {
-      if (index < 0 || index >= photos.length) return;
-      if (preloadCache.has(index)) return;
-
-      const img = new Image();
-      img.src = photos[index].full;
-      preloadCache.set(index, img);
-      img.decode().catch(() => {}); // Decode in background, ignore errors
-    }
-
-    function preloadAdjacent(index) {
-      preloadImage(index - 1);
-      preloadImage(index + 1);
-    }
 
     function renderGallery() {
       const gallery = document.getElementById('gallery');
       const containerWidth = gallery.clientWidth;
-
       const aspectRatios = photos.map(p => p.aspect || 1.5);
 
       const layout = justifiedLayout(aspectRatios, {
@@ -180,26 +117,20 @@
 
       gallery.style.height = layout.containerHeight + 'px';
 
-      // Update existing elements or create new ones
       layout.boxes.forEach((box, i) => {
         let div = photoElements[i];
-
         if (!div) {
           div = document.createElement('div');
           div.className = 'photo-item';
           div.onclick = () => openLightbox(i);
-
           const img = document.createElement('img');
           img.src = photos[i].thumb;
           img.alt = '';
           img.loading = 'lazy';
-          img.decoding = 'async';
-
           div.appendChild(img);
           gallery.appendChild(div);
           photoElements[i] = div;
         }
-
         div.style.top = box.top + 'px';
         div.style.left = box.left + 'px';
         div.style.width = box.width + 'px';
@@ -207,92 +138,37 @@
       });
     }
 
-    function init() {
-      renderGallery();
-
-      // Re-layout on resize
-      let resizeTimeout;
-      window.addEventListener('resize', () => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(renderGallery, 100);
-      });
-
-      // Touch swipe support
-      const lightbox = document.getElementById('lightbox');
-      lightbox.addEventListener('touchstart', (e) => {
-        touchStartX = e.changedTouches[0].screenX;
-        wasMultiTouch = e.touches.length > 1;
-      }, { passive: true });
-
-      lightbox.addEventListener('touchmove', (e) => {
-        if (e.touches.length > 1) wasMultiTouch = true;
-      }, { passive: true });
-
-      lightbox.addEventListener('touchend', (e) => {
-        touchEndX = e.changedTouches[0].screenX;
-        handleSwipe();
-      }, { passive: true });
-    }
-
-    function handleSwipe() {
-      // Ignore swipe if it was a multi-touch gesture (pinch zoom)
-      if (wasMultiTouch) return;
-
-      const diff = touchStartX - touchEndX;
-      const threshold = 50;
-      if (Math.abs(diff) > threshold) {
-        if (diff > 0) navigate(1);
-        else navigate(-1);
+    function loadImage(index) {
+      const img = document.getElementById('lightbox-img');
+      const aspect = photos[index].aspect || 1.5;
+      const maxW = window.innerWidth * 0.95;
+      const maxH = window.innerHeight * 0.95;
+      // Size to fit viewport
+      let w, h;
+      if (maxW / maxH > aspect) {
+        h = maxH; w = h * aspect;
+      } else {
+        w = maxW; h = w / aspect;
       }
+      img.style.width = w + 'px';
+      img.style.height = h + 'px';
+      // Show thumbnail immediately (stretched to full size)
+      img.src = photos[index].thumb;
+      // Load full image and swap when ready
+      const fullImg = new Image();
+      fullImg.src = photos[index].full;
+      fullImg.decode().then(() => {
+        if (currentIndex === index) img.src = photos[index].full;
+      }).catch(() => {
+        if (currentIndex === index) img.src = photos[index].full;
+      });
     }
 
     function openLightbox(index) {
       currentIndex = index;
       loadImage(index);
-      preloadAdjacent(index);
       document.getElementById('lightbox').classList.add('active');
       document.body.style.overflow = 'hidden';
-    }
-
-    function loadImage(index) {
-      const img = document.getElementById('lightbox-img');
-      const spinner = document.getElementById('spinner');
-
-      const aspect = photos[index].aspect || 1.5;
-
-      // Calculate dimensions to fit viewport while maintaining aspect ratio
-      const maxW = window.innerWidth * 0.95;
-      const maxH = window.innerHeight * 0.95;
-
-      let w, h;
-      if (maxW / maxH > aspect) {
-        // Height constrained
-        h = maxH;
-        w = h * aspect;
-      } else {
-        // Width constrained
-        w = maxW;
-        h = w / aspect;
-      }
-
-      img.style.width = w + 'px';
-      img.style.height = h + 'px';
-      img.src = photos[index].thumb;
-      img.classList.add('loading');
-      spinner.classList.add('active');
-
-      const fullImg = new Image();
-      fullImg.src = photos[index].full;
-      fullImg.decode().then(() => {
-        img.src = photos[index].full;
-        img.classList.remove('loading');
-        spinner.classList.remove('active');
-      }).catch(() => {
-        // Fallback if decode() fails
-        img.src = photos[index].full;
-        img.classList.remove('loading');
-        spinner.classList.remove('active');
-      });
     }
 
     function closeLightbox() {
@@ -303,7 +179,6 @@
     function navigate(dir) {
       currentIndex = (currentIndex + dir + photos.length) % photos.length;
       loadImage(currentIndex);
-      preloadAdjacent(currentIndex);
     }
 
     document.addEventListener('keydown', (e) => {
@@ -314,15 +189,28 @@
     });
 
     document.getElementById('lightbox').addEventListener('click', (e) => {
-      if (e.target.id === 'lightbox' || e.target.classList.contains('lightbox-content')) {
-        closeLightbox();
-      }
+      if (e.target.id === 'lightbox') closeLightbox();
     });
 
-    // Load justified-layout and init
+    // Touch swipe
+    const lightbox = document.getElementById('lightbox');
+    lightbox.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+      wasMultiTouch = e.touches.length > 1;
+    }, { passive: true });
+    lightbox.addEventListener('touchmove', (e) => {
+      if (e.touches.length > 1) wasMultiTouch = true;
+    }, { passive: true });
+    lightbox.addEventListener('touchend', (e) => {
+      if (wasMultiTouch) return;
+      const diff = touchStartX - e.changedTouches[0].screenX;
+      if (Math.abs(diff) > 50) navigate(diff > 0 ? 1 : -1);
+    }, { passive: true });
+
     import('https://esm.sh/justified-layout@4.1.0').then(module => {
       window.justifiedLayout = module.default;
-      init();
+      renderGallery();
+      window.addEventListener('resize', () => renderGallery());
     });
   </script>
 </body>
