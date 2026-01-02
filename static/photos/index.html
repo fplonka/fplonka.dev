@@ -43,6 +43,7 @@
       display: flex;
       justify-content: center;
       align-items: center;
+      overflow: hidden;
     }
 
     .lightbox-content img {
@@ -53,6 +54,7 @@
 
     .lightbox-content img.loading {
       filter: blur(20px);
+      transform: scale(1.1);
     }
 
     .lightbox-spinner {
@@ -143,6 +145,7 @@
     let currentIndex = 0;
     let touchStartX = 0;
     let touchEndX = 0;
+    let wasMultiTouch = false;
 
     let photoElements = [];
     const preloadCache = new Map();
@@ -218,6 +221,11 @@
       const lightbox = document.getElementById('lightbox');
       lightbox.addEventListener('touchstart', (e) => {
         touchStartX = e.changedTouches[0].screenX;
+        wasMultiTouch = e.touches.length > 1;
+      }, { passive: true });
+
+      lightbox.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) wasMultiTouch = true;
       }, { passive: true });
 
       lightbox.addEventListener('touchend', (e) => {
@@ -227,6 +235,9 @@
     }
 
     function handleSwipe() {
+      // Ignore swipe if it was a multi-touch gesture (pinch zoom)
+      if (wasMultiTouch) return;
+
       const diff = touchStartX - touchEndX;
       const threshold = 50;
       if (Math.abs(diff) > threshold) {
