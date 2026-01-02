@@ -7,22 +7,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     .photo-grid {
-      display: flex;
-      flex-wrap: wrap;
-    }
-
-    .photo-row {
-      display: flex;
-      width: 100%;
+      position: relative;
     }
 
     .photo-item {
+      position: absolute;
       cursor: pointer;
     }
 
     .photo-item img {
+      width: 100%;
       height: 100%;
-      width: auto;
       display: block;
     }
 
@@ -69,6 +64,7 @@
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
       display: none;
+      z-index: 10;
     }
 
     .lightbox-spinner.active {
@@ -119,8 +115,10 @@
 <body class="bg-zinc-100 m-0">
   <div class="p-4 md:p-6">
     <header class="mb-6">
-      <a href="/" class="text-zinc-500 hover:text-zinc-700">← back</a>
-      <h1 class="m-0 mt-2">photos</h1>
+      <h1 class="m-0">photos</h1>
+      <p class="mt-4 mb-0">
+      photos from my fuji x100vi from newest to oldest. this autosyncs to my icloud photos where i save all decent pictures, so not everything here is exactly brilliant. but there are a few bangers. 
+      </p>
     </header>
 
     <div class="photo-grid" id="gallery">
@@ -146,75 +144,74 @@
     let touchStartX = 0;
     let touchEndX = 0;
 
-    const ROW_HEIGHT = 260;
-    const MIN_GAP = 4;
+    let photoElements = [];
+    const preloadCache = new Map();
 
-    function init() {
+    function preloadImage(index) {
+      if (index < 0 || index >= photos.length) return;
+      if (preloadCache.has(index)) return;
+
+      const img = new Image();
+      img.src = photos[index].full;
+      preloadCache.set(index, img);
+      img.decode().catch(() => {}); // Decode in background, ignore errors
+    }
+
+    function preloadAdjacent(index) {
+      preloadImage(index - 1);
+      preloadImage(index + 1);
+    }
+
+    function renderGallery() {
       const gallery = document.getElementById('gallery');
       const containerWidth = gallery.clientWidth;
 
-      // Build rows
-      const rows = [];
-      let currentRow = [];
-      let currentRowWidth = 0;
+      const aspectRatios = photos.map(p => p.aspect || 1.5);
 
-      photos.forEach((photo, i) => {
-        const aspect = photo.aspect || 1.5;
-        const imgWidth = ROW_HEIGHT * aspect;
-
-        if (currentRowWidth + imgWidth + (currentRow.length * MIN_GAP) > containerWidth && currentRow.length > 0) {
-          rows.push(currentRow);
-          currentRow = [];
-          currentRowWidth = 0;
-        }
-
-        currentRow.push({ ...photo, index: i, width: imgWidth });
-        currentRowWidth += imgWidth;
+      const layout = justifiedLayout(aspectRatios, {
+        containerWidth: containerWidth,
+        targetRowHeight: 280,
+        boxSpacing: 20,
+        containerPadding: 0,
       });
 
-      if (currentRow.length > 0) {
-        rows.push(currentRow);
-      }
+      gallery.style.height = layout.containerHeight + 'px';
 
-      // Calculate horizontal gaps for each row first
-      const rowGaps = rows.map((row, rowIndex) => {
-        const totalImgWidth = row.reduce((sum, p) => sum + p.width, 0);
-        const extraSpace = containerWidth - totalImgWidth;
-        const gap = row.length > 1 ? extraSpace / (row.length - 1) : 0;
-        const isLastRow = rowIndex === rows.length - 1;
-        return (isLastRow && gap > 40) ? MIN_GAP : Math.max(gap, MIN_GAP);
-      });
+      // Update existing elements or create new ones
+      layout.boxes.forEach((box, i) => {
+        let div = photoElements[i];
 
-      // Render rows with justified gaps
-      rows.forEach((row, rowIndex) => {
-        const rowDiv = document.createElement('div');
-        rowDiv.className = 'photo-row';
-
-        const hGap = rowGaps[rowIndex];
-
-        // Vertical gap = average of this row's h-gap and next row's h-gap
-        const nextHGap = rowIndex < rows.length - 1 ? rowGaps[rowIndex + 1] : hGap;
-        const vGap = (hGap + nextHGap) / 2;
-        rowDiv.style.marginBottom = vGap + 'px';
-
-        row.forEach((photo, i) => {
-          const div = document.createElement('div');
+        if (!div) {
+          div = document.createElement('div');
           div.className = 'photo-item';
-          div.style.height = ROW_HEIGHT + 'px';
-          div.style.marginRight = (i < row.length - 1) ? hGap + 'px' : '0';
-          div.onclick = () => openLightbox(photo.index);
+          div.onclick = () => openLightbox(i);
 
           const img = document.createElement('img');
-          img.src = photo.thumb;
+          img.src = photos[i].thumb;
           img.alt = '';
           img.loading = 'lazy';
           img.decoding = 'async';
 
           div.appendChild(img);
-          rowDiv.appendChild(div);
-        });
+          gallery.appendChild(div);
+          photoElements[i] = div;
+        }
 
-        gallery.appendChild(rowDiv);
+        div.style.top = box.top + 'px';
+        div.style.left = box.left + 'px';
+        div.style.width = box.width + 'px';
+        div.style.height = box.height + 'px';
+      });
+    }
+
+    function init() {
+      renderGallery();
+
+      // Re-layout on resize
+      let resizeTimeout;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(renderGallery, 100);
       });
 
       // Touch swipe support
@@ -241,6 +238,7 @@
     function openLightbox(index) {
       currentIndex = index;
       loadImage(index);
+      preloadAdjacent(index);
       document.getElementById('lightbox').classList.add('active');
       document.body.style.overflow = 'hidden';
     }
@@ -249,17 +247,41 @@
       const img = document.getElementById('lightbox-img');
       const spinner = document.getElementById('spinner');
 
+      const aspect = photos[index].aspect || 1.5;
+
+      // Calculate dimensions to fit viewport while maintaining aspect ratio
+      const maxW = window.innerWidth * 0.95;
+      const maxH = window.innerHeight * 0.95;
+
+      let w, h;
+      if (maxW / maxH > aspect) {
+        // Height constrained
+        h = maxH;
+        w = h * aspect;
+      } else {
+        // Width constrained
+        w = maxW;
+        h = w / aspect;
+      }
+
+      img.style.width = w + 'px';
+      img.style.height = h + 'px';
       img.src = photos[index].thumb;
       img.classList.add('loading');
       spinner.classList.add('active');
 
       const fullImg = new Image();
-      fullImg.onload = () => {
+      fullImg.src = photos[index].full;
+      fullImg.decode().then(() => {
         img.src = photos[index].full;
         img.classList.remove('loading');
         spinner.classList.remove('active');
-      };
-      fullImg.src = photos[index].full;
+      }).catch(() => {
+        // Fallback if decode() fails
+        img.src = photos[index].full;
+        img.classList.remove('loading');
+        spinner.classList.remove('active');
+      });
     }
 
     function closeLightbox() {
@@ -270,6 +292,7 @@
     function navigate(dir) {
       currentIndex = (currentIndex + dir + photos.length) % photos.length;
       loadImage(currentIndex);
+      preloadAdjacent(currentIndex);
     }
 
     document.addEventListener('keydown', (e) => {
@@ -285,7 +308,11 @@
       }
     });
 
-    init();
+    // Load justified-layout and init
+    import('https://esm.sh/justified-layout@4.1.0').then(module => {
+      window.justifiedLayout = module.default;
+      init();
+    });
   </script>
 </body>
 
