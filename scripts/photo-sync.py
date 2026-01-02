@@ -76,13 +76,21 @@ def process_image(photo: osxphotos.PhotoInfo, cache_dir: Path, file_hash: str) -
     thumb_path = cache_dir / f"{file_hash}_thumb.webp"
     full_path = cache_dir / f"{file_hash}_full.webp"
 
-    # Check if already processed
+    # Check if already processed - need to get aspect ratio from thumb
     if thumb_path.exists() and full_path.exists():
+        try:
+            with Image.open(thumb_path) as img:
+                w, h = img.size
+                aspect = round(w / h, 3)
+        except:
+            aspect = 1.5
         return {
             "thumb_local": thumb_path,
             "full_local": full_path,
             "hash": file_hash,
             "date": photo.date,
+            "aspect": aspect,
+            "cached": True,
         }
 
     # Export original from Photos library (use_photos_export triggers iCloud download)
@@ -127,12 +135,16 @@ def process_image(photo: osxphotos.PhotoInfo, cache_dir: Path, file_hash: str) -
         # Clean up exported original
         src_path.unlink(missing_ok=True)
 
+        aspect = round(orig_width / orig_height, 3)
+
         print(f"  Processed: {photo.filename}")
         return {
             "thumb_local": thumb_path,
             "full_local": full_path,
             "hash": file_hash,
             "date": photo.date,
+            "aspect": aspect,
+            "cached": False,
         }
 
     except Exception as e:
@@ -178,11 +190,8 @@ def upload_to_r2(local_path: Path, remote_key: str, dry_run: bool = False) -> bo
         return False
 
 
-def list_r2_objects(dry_run: bool = False) -> set:
+def list_r2_objects() -> set:
     """List all objects currently in R2 bucket."""
-    if dry_run:
-        return set()
-
     try:
         s3 = get_r2_client()
         objects = set()
@@ -198,6 +207,33 @@ def list_r2_objects(dry_run: bool = False) -> set:
         return set()
 
 
+def delete_from_r2(keys: list[str], dry_run: bool = False) -> int:
+    """Delete objects from R2."""
+    if not keys:
+        return 0
+
+    if dry_run:
+        for key in keys:
+            print(f"  [DRY RUN] Would delete: {key}")
+        return len(keys)
+
+    try:
+        s3 = get_r2_client()
+        # Delete in batches of 1000 (S3 limit)
+        deleted = 0
+        for i in range(0, len(keys), 1000):
+            batch = keys[i:i+1000]
+            s3.delete_objects(
+                Bucket=R2_BUCKET,
+                Delete={"Objects": [{"Key": k} for k in batch]}
+            )
+            deleted += len(batch)
+        return deleted
+    except Exception as e:
+        print(f"  Delete failed: {e}")
+        return 0
+
+
 def generate_html(photos: list[dict]) -> str:
     """Generate the gallery HTML with embedded photo data."""
     template = HTML_TEMPLATE.read_text()
@@ -206,6 +242,7 @@ def generate_html(photos: list[dict]) -> str:
         {
             "thumb": f"{R2_PUBLIC_URL}/thumb/{p['hash']}.webp",
             "full": f"{R2_PUBLIC_URL}/full/{p['hash']}.webp",
+            "aspect": p.get("aspect", 1.5),
         }
         for p in photos
     ]
@@ -276,20 +313,13 @@ def main():
 
     print(f"\nProcessed {len(processed)} images")
 
-    # Check what's already uploaded
-    print("\nChecking R2...")
-    existing = list_r2_objects(args.dry_run)
-
-    # Upload new images in parallel (8 workers for network I/O)
+    # Upload newly processed images (skip cached ones - they're already in R2)
     print("\nUploading to R2...")
     uploads = []
     for p in processed:
-        thumb_key = f"thumb/{p['hash']}.webp"
-        full_key = f"full/{p['hash']}.webp"
-        if thumb_key not in existing:
-            uploads.append((p["thumb_local"], thumb_key))
-        if full_key not in existing:
-            uploads.append((p["full_local"], full_key))
+        if not p.get("cached", False):
+            uploads.append((p["thumb_local"], f"thumb/{p['hash']}.webp"))
+            uploads.append((p["full_local"], f"full/{p['hash']}.webp"))
 
     uploaded = 0
     if uploads:
@@ -303,6 +333,23 @@ def main():
                     uploaded += 1
 
     print(f"Uploaded {uploaded} new files")
+
+    # Sync deletions - remove from R2 what's no longer in album
+    print("\nSyncing deletions...")
+    current_hashes = {p["hash"] for p in processed}
+    expected_keys = set()
+    for h in current_hashes:
+        expected_keys.add(f"thumb/{h}.webp")
+        expected_keys.add(f"full/{h}.webp")
+
+    existing_keys = list_r2_objects()
+    to_delete = [k for k in existing_keys if k not in expected_keys]
+
+    if to_delete:
+        deleted = delete_from_r2(to_delete, args.dry_run)
+        print(f"Deleted {deleted} orphaned files")
+    else:
+        print("No orphaned files to delete")
 
     # Generate HTML
     print("\nGenerating HTML...")
