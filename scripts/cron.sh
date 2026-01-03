@@ -1,5 +1,7 @@
-#!/bin/bash
+#!/bin/zsh
 set -e
+
+source ~/.zshrc
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
