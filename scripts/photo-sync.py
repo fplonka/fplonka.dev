@@ -1,68 +1,64 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = [
-#     "pillow",
-#     "pillow-heif",
-#     "boto3",
-#     "osxphotos",
-# ]
+# dependencies = ["pillow", "pillow-heif", "boto3", "osxphotos"]
 # ///
-"""
-Photo gallery sync script.
-
-Pulls photos from an Apple Photos album, creates optimized WebP versions,
-uploads to Cloudflare R2, and generates the gallery HTML.
-
-Usage:
-    uv run photo-sync.py [--dry-run] [--album "Album Name"]
-
-Setup:
-    1. Configure R2 credentials (see CONFIG section below)
-    2. Create an album in Apple Photos (default: "Website")
-    3. Run: uv run photo-sync.py
-"""
+"""Sync Apple Photos album to R2 and generate gallery HTML."""
 
 import os
 import json
 import hashlib
-import argparse
 from pathlib import Path
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import boto3
 import osxphotos
-from PIL import Image, ImageOps
 import pillow_heif
+from botocore.config import Config
+from PIL import Image, ImageOps
 
-# Register HEIF/HEIC support with Pillow
 pillow_heif.register_heif_opener()
 
-# Skip RAW formats (process JPEGs/HEICs only)
-SKIP_EXTENSIONS = {".raf", ".cr2", ".cr3", ".nef", ".arw", ".dng", ".orf", ".rw2"}
-
-# === CONFIG ===
-ALBUM_NAME = "FUJIFILM X100VI"  # Apple Photos album to sync
-CACHE_DIR = Path.home() / ".cache" / "photo-gallery"
-OUTPUT_HTML = Path(__file__).parent.parent / "static" / "photos" / "index.html"
-HTML_TEMPLATE = Path(__file__).parent.parent / "static" / "photos" / "template.html"
-
-# R2 settings - set these environment variables
-R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "")
-R2_ACCESS_KEY = os.environ.get("R2_ACCESS_KEY", "")
-R2_SECRET_KEY = os.environ.get("R2_SECRET_KEY", "")
-R2_BUCKET = os.environ.get("R2_BUCKET", "fplonkadev-photos")
-# Use the r2.dev URL from your bucket's settings (no custom domain needed)
-R2_PUBLIC_URL = "https://pub-9fffa49765b54776a5da8b81c29321c9.r2.dev"
-
-# Image settings
-THUMB_WIDTH = 600
-WEBP_QUALITY = 85
-# ==============
+# Config
+ALBUM = "FUJIFILM X100VI"
+CACHE = Path.home() / ".cache" / "photo-gallery"
+OUTPUT = Path(__file__).parent.parent / "static" / "photos" / "index.html"
+TEMPLATE = Path(__file__).parent.parent / "static" / "photos" / "template.html"
+R2_URL = "https://pub-9fffa49765b54776a5da8b81c29321c9.r2.dev"
+SKIP_EXT = {".raf", ".cr2", ".cr3", ".nef", ".arw", ".dng", ".orf", ".rw2"}
 
 
-def get_photo_hash(photo: osxphotos.PhotoInfo) -> str:
-    """Get hash for change detection based on photo metadata."""
+def get_r2():
+    return boto3.client(
+        "s3",
+        endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+        aws_access_key_id=os.environ["R2_ACCESS_KEY"],
+        aws_secret_access_key=os.environ["R2_SECRET_KEY"],
+        config=Config(signature_version="s3v4"),
+    )
+
+
+def list_r2():
+    s3 = get_r2()
+    keys = set()
+    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=os.environ.get("R2_BUCKET", "fplonkadev-photos")):
+        for obj in page.get("Contents", []):
+            keys.add(obj["Key"])
+    return keys
+
+
+def upload(local, key):
+    get_r2().upload_file(str(local), os.environ.get("R2_BUCKET", "fplonkadev-photos"), key,
+                         ExtraArgs={"ContentType": "image/webp", "CacheControl": "public, max-age=31536000"})
+
+
+def delete_keys(keys):
+    if keys:
+        get_r2().delete_objects(Bucket=os.environ.get("R2_BUCKET", "fplonkadev-photos"),
+                                Delete={"Objects": [{"Key": k} for k in keys]})
+
+
+def photo_hash(photo):
     h = hashlib.md5()
     h.update(photo.uuid.encode())
     h.update(str(photo.date).encode())
@@ -71,299 +67,108 @@ def get_photo_hash(photo: osxphotos.PhotoInfo) -> str:
     return h.hexdigest()[:12]
 
 
-def process_image(photo: osxphotos.PhotoInfo, cache_dir: Path, file_hash: str) -> dict | None:
-    """Process a single image, creating thumb and full versions."""
-    thumb_path = cache_dir / f"{file_hash}_thumb.webp"
-    full_path = cache_dir / f"{file_hash}_full.webp"
+def process(photo, h):
+    """Process photo, return (hash, aspect, date) or None."""
+    thumb = CACHE / f"{h}_thumb.webp"
+    full = CACHE / f"{h}_full.webp"
 
-    # Check if already processed - need to get aspect ratio from thumb
-    if thumb_path.exists() and full_path.exists():
-        try:
-            with Image.open(thumb_path) as img:
-                w, h = img.size
-                aspect = round(w / h, 3)
-        except:
-            aspect = 1.5
-        return {
-            "thumb_local": thumb_path,
-            "full_local": full_path,
-            "hash": file_hash,
-            "date": photo.date,
-            "aspect": aspect,
-            "cached": True,
-        }
+    if thumb.exists() and full.exists():
+        with Image.open(thumb) as img:
+            w, hi = img.size
+        return h, round(w / hi, 3), photo.date, thumb, full
 
-    # Export original from Photos library (use_photos_export triggers iCloud download)
-    try:
-        exported = photo.export(
-            str(cache_dir),
-            use_photos_export=True,  # This triggers iCloud download if needed
-            timeout=300,  # Wait up to 5 min for iCloud download
-        )
-        if not exported:
-            print(f"  Failed to export (may still be in iCloud): {photo.filename}")
-            return None
-        src_path = Path(exported[0])
-    except Exception as e:
-        print(f"  Export error for {photo.filename}: {e}")
+    print(f"  Exporting: {photo.filename}...")
+    exported = photo.export(str(CACHE), use_photos_export=True, timeout=30)
+    if not exported:
+        print(f"  Skip (iCloud): {photo.filename}")
         return None
 
-    try:
-        img = Image.open(src_path)
+    src = Path(exported[0])
+    img = Image.open(src)
+    img = ImageOps.exif_transpose(img) or img
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
 
-        # Handle EXIF orientation
-        try:
-            img = ImageOps.exif_transpose(img)
-        except Exception:
-            pass
+    w, hi = img.size
+    aspect = round(w / hi, 3)
 
-        # Convert to RGB if needed
-        if img.mode not in ("RGB", "L"):
-            img = img.convert("RGB")
+    t = img.copy()
+    t.thumbnail((600, int(600 * hi / w)), Image.LANCZOS)
+    t.save(thumb, "WEBP", quality=85)
+    img.save(full, "WEBP", quality=85)
+    src.unlink()
 
-        orig_width, orig_height = img.size
-
-        # Generate thumbnail
-        thumb_height = int(THUMB_WIDTH * orig_height / orig_width)
-        thumb = img.copy()
-        thumb.thumbnail((THUMB_WIDTH, thumb_height), Image.LANCZOS)
-        thumb.save(thumb_path, "WEBP", quality=WEBP_QUALITY)
-
-        # Generate full size (original resolution, just WebP compressed)
-        img.save(full_path, "WEBP", quality=WEBP_QUALITY)
-
-        # Clean up exported original
-        src_path.unlink(missing_ok=True)
-
-        aspect = round(orig_width / orig_height, 3)
-
-        print(f"  Processed: {photo.filename}")
-        return {
-            "thumb_local": thumb_path,
-            "full_local": full_path,
-            "hash": file_hash,
-            "date": photo.date,
-            "aspect": aspect,
-            "cached": False,
-        }
-
-    except Exception as e:
-        print(f"  Error processing {photo.filename}: {e}")
-        src_path.unlink(missing_ok=True)
-        return None
-
-
-def get_r2_client():
-    """Create R2 S3 client."""
-    import boto3
-    from botocore.config import Config
-
-    return boto3.client(
-        "s3",
-        endpoint_url=f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
-        aws_access_key_id=R2_ACCESS_KEY,
-        aws_secret_access_key=R2_SECRET_KEY,
-        config=Config(signature_version="s3v4"),
-    )
-
-
-def upload_to_r2(local_path: Path, remote_key: str, dry_run: bool = False) -> bool:
-    """Upload a file to R2."""
-    if dry_run:
-        print(f"  [DRY RUN] Would upload: {remote_key}")
-        return True
-
-    try:
-        s3 = get_r2_client()
-        s3.upload_file(
-            str(local_path),
-            R2_BUCKET,
-            remote_key,
-            ExtraArgs={
-                "ContentType": "image/webp",
-                "CacheControl": "public, max-age=31536000",
-            },
-        )
-        return True
-    except Exception as e:
-        print(f"  Upload failed for {remote_key}: {e}")
-        return False
-
-
-def list_r2_objects() -> set:
-    """List all objects currently in R2 bucket."""
-    try:
-        s3 = get_r2_client()
-        objects = set()
-        paginator = s3.get_paginator("list_objects_v2")
-
-        for page in paginator.paginate(Bucket=R2_BUCKET):
-            for obj in page.get("Contents", []):
-                objects.add(obj["Key"])
-
-        return objects
-    except Exception as e:
-        print(f"  Warning: Could not list R2 objects: {e}")
-        return set()
-
-
-def delete_from_r2(keys: list[str], dry_run: bool = False) -> int:
-    """Delete objects from R2."""
-    if not keys:
-        return 0
-
-    if dry_run:
-        for key in keys:
-            print(f"  [DRY RUN] Would delete: {key}")
-        return len(keys)
-
-    try:
-        s3 = get_r2_client()
-        # Delete in batches of 1000 (S3 limit)
-        deleted = 0
-        for i in range(0, len(keys), 1000):
-            batch = keys[i:i+1000]
-            s3.delete_objects(
-                Bucket=R2_BUCKET,
-                Delete={"Objects": [{"Key": k} for k in batch]}
-            )
-            deleted += len(batch)
-        return deleted
-    except Exception as e:
-        print(f"  Delete failed: {e}")
-        return 0
-
-
-def generate_html(photos: list[dict]) -> str:
-    """Generate the gallery HTML with embedded photo data."""
-    template = HTML_TEMPLATE.read_text()
-
-    photo_data = [
-        {
-            "thumb": f"{R2_PUBLIC_URL}/thumb/{p['hash']}.webp",
-            "full": f"{R2_PUBLIC_URL}/full/{p['hash']}.webp",
-            "aspect": p.get("aspect", 1.5),
-        }
-        for p in photos
-    ]
-
-    return template.replace("PHOTOS_JSON_PLACEHOLDER", json.dumps(photo_data))
+    print(f"  Processed: {photo.filename}")
+    return h, aspect, photo.date, thumb, full
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sync Apple Photos album to gallery")
-    parser.add_argument("--dry-run", action="store_true", help="Don't upload, just show what would happen")
-    parser.add_argument("--album", default=ALBUM_NAME, help=f"Album name (default: {ALBUM_NAME})")
-    parser.add_argument("--limit", type=int, default=0, help="Limit number of photos to process (0 = all)")
-    args = parser.parse_args()
+    CACHE.mkdir(parents=True, exist_ok=True)
 
-    print("Photo Gallery Sync")
-    print("==================")
-
-    # Ensure cache directory exists
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Load Photos library
-    print(f"\nLoading Apple Photos library...")
-    photosdb = osxphotos.PhotosDB()
-
-    # Find album
-    albums = [a for a in photosdb.album_info if a.title == args.album]
-    if not albums:
-        print(f"\nAlbum '{args.album}' not found.")
-        print("Available albums:")
-        for a in sorted(photosdb.album_info, key=lambda x: x.title or ""):
-            if a.title:
-                print(f"  - {a.title}")
+    # Get album photos
+    print("Loading Photos library...")
+    db = osxphotos.PhotosDB()
+    album = next((a for a in db.album_info if a.title == ALBUM), None)
+    if not album:
+        print(f"Album '{ALBUM}' not found")
         return
 
-    album = albums[0]
-    photos = album.photos
+    photos = [(p, photo_hash(p)) for p in album.photos if Path(p.filename).suffix.lower() not in SKIP_EXT]
+    print(f"Album: {len(photos)} photos")
 
-    if not photos:
-        print(f"\nAlbum '{args.album}' is empty. Add some photos and run again.")
-        return
+    # Check R2
+    print("Checking R2...")
+    r2_keys = list_r2()
+    r2_hashes = {k.split("/")[1].replace(".webp", "") for k in r2_keys if "/" in k}
+    print(f"R2: {len(r2_hashes)} photos")
 
-    print(f"Found {len(photos)} photos in album '{args.album}'")
+    # Process and upload missing
+    to_upload = [(p, h) for p, h in photos if h not in r2_hashes]
+    results = []
 
-    # Process images (downloads from iCloud if needed)
-    print("\nProcessing images...")
-    photos_to_process = photos[:args.limit] if args.limit > 0 else photos
+    if to_upload:
+        print(f"\nProcessing {len(to_upload)} new...")
+        with ThreadPoolExecutor(4) as ex:
+            for i, r in enumerate(ex.map(lambda x: process(x[0], x[1]), to_upload)):
+                if r:
+                    results.append(r)
+                    print(f"  Uploading {i+1}/{len(to_upload)}...")
+                    upload(r[3], f"thumb/{r[0]}.webp")
+                    upload(r[4], f"full/{r[0]}.webp")
 
-    # Filter out RAW files first
-    photos_filtered = [
-        p for p in photos_to_process
-        if Path(p.filename).suffix.lower() not in SKIP_EXTENSIONS
-    ]
+    # Delete orphans
+    print("Checking for orphans...")
+    album_hashes = {h for _, h in photos}
+    orphans = [k for k in r2_keys if k.split("/")[1].replace(".webp", "") not in album_hashes]
+    if orphans:
+        print(f"Deleting {len(orphans)} orphans...")
+        delete_keys(orphans)
 
-    # Process in parallel (4 workers - gentle on Photos.app)
-    processed = []
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = {
-            executor.submit(process_image, photo, CACHE_DIR, get_photo_hash(photo)): photo
-            for photo in photos_filtered
-        }
-        for future in as_completed(futures):
-            result = future.result()
-            if result:
-                processed.append(result)
+    # Generate HTML from R2
+    print("Fetching final R2 state...")
+    final_r2 = list_r2()
+    final_hashes = {k.split("/")[1].replace(".webp", "") for k in final_r2 if "/" in k}
+    print("Generating HTML...")
 
-    # Sort by date (newest first)
-    processed.sort(key=lambda x: x["date"], reverse=True)
+    # Build photo data with dates/aspects
+    data = {}
+    for p, h in photos:
+        if h in final_hashes:
+            thumb = CACHE / f"{h}_thumb.webp"
+            aspect = 1.5
+            if thumb.exists():
+                with Image.open(thumb) as img:
+                    aspect = round(img.size[0] / img.size[1], 3)
+            data[h] = {"hash": h, "aspect": aspect, "date": p.date}
 
-    print(f"\nProcessed {len(processed)} images")
+    # Sort by date, generate HTML
+    sorted_photos = sorted(data.values(), key=lambda x: x["date"], reverse=True)
+    html_data = [{"thumb": f"{R2_URL}/thumb/{p['hash']}.webp", "full": f"{R2_URL}/full/{p['hash']}.webp", "aspect": p["aspect"]} for p in sorted_photos]
 
-    # Upload newly processed images (skip cached ones - they're already in R2)
-    print("\nUploading to R2...")
-    uploads = []
-    for p in processed:
-        if not p.get("cached", False):
-            uploads.append((p["thumb_local"], f"thumb/{p['hash']}.webp"))
-            uploads.append((p["full_local"], f"full/{p['hash']}.webp"))
+    html = TEMPLATE.read_text().replace("PHOTOS_JSON_PLACEHOLDER", json.dumps(html_data))
+    OUTPUT.write_text(html)
 
-    uploaded = 0
-    if uploads:
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            futures = [
-                executor.submit(upload_to_r2, local, key, args.dry_run)
-                for local, key in uploads
-            ]
-            for future in as_completed(futures):
-                if future.result():
-                    uploaded += 1
-
-    print(f"Uploaded {uploaded} new files")
-
-    # Sync deletions - remove from R2 what's no longer in album
-    print("\nSyncing deletions...")
-    current_hashes = {p["hash"] for p in processed}
-    expected_keys = set()
-    for h in current_hashes:
-        expected_keys.add(f"thumb/{h}.webp")
-        expected_keys.add(f"full/{h}.webp")
-
-    existing_keys = list_r2_objects()
-    to_delete = [k for k in existing_keys if k not in expected_keys]
-
-    if to_delete:
-        deleted = delete_from_r2(to_delete, args.dry_run)
-        print(f"Deleted {deleted} orphaned files")
-    else:
-        print("No orphaned files to delete")
-
-    # Generate HTML
-    print("\nGenerating HTML...")
-    html = generate_html(processed)
-
-    if args.dry_run:
-        print(f"[DRY RUN] Would write HTML to {OUTPUT_HTML}")
-    else:
-        OUTPUT_HTML.write_text(html)
-        print(f"Wrote {OUTPUT_HTML}")
-
-    print("\nDone!")
-    print(f"\nGallery: https://fplonka.dev/photos")
-    print(f"Images:  {R2_PUBLIC_URL}")
+    print(f"\nDone! {len(sorted_photos)} photos")
 
 
 if __name__ == "__main__":
