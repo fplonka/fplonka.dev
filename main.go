@@ -30,9 +30,9 @@ func main() {
 	})
 	http.HandleFunc("/fragment/", serveFragment)
 
-	http.HandleFunc("/photos", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./static/photos/index.html")
-	})
+	// http.HandleFunc("/photos", func(w http.ResponseWriter, r *http.Request) {
+		// http.ServeFile(w, r, "./static/photos/index.html")
+	// })
 
 	http.ListenAndServe(":3001", nil)
 }
